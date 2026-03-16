@@ -1,6 +1,7 @@
 # STA141B-Group-26
-WQ2026 Final Project 
+WQ2026 Final Project - Top NCAA Football Programs
 
-
-
-American Football API - https://api-sports.io/documentation/nfl/v1
+Liam Sullivan
+Brandon Tung
+Exel Uy
+Caroline Wang
