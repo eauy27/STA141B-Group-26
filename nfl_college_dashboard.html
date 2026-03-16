@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>NFL College Pipeline Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,sans-serif;background:#f8f8f8;color:#222}
+  header{background:#1a1a2e;color:#fff;padding:16px 28px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  header h1{font-size:16px;font-weight:600}
+  header small{font-size:11px;opacity:.55}
+  .pill{font-size:11px;background:rgba(255,255,255,.12);padding:3px 9px;border-radius:20px}
+  .tabs{display:flex;background:#fff;border-bottom:1px solid #e5e5e5;padding:0 24px}
+  .tb{padding:11px 18px;font-size:13px;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:#666;font-family:inherit}
+  .tb.active{color:#1a1a2e;border-bottom-color:#1a1a2e;font-weight:600}
+  .page{display:none;padding:20px 24px;max-width:1100px;margin:0 auto}
+  .page.active{display:block}
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+  .metric{background:#fff;border:1px solid #e5e5e5;border-radius:8px;padding:14px 18px}
+  .metric .val{font-size:28px;font-weight:700}
+  .metric .lbl{font-size:11px;color:#888;margin-top:2px}
+  .green{color:#2d7a2d}.blue{color:#1a5ba8}.gold{color:#b8860b}
+  .toolbar{display:flex;gap:12px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+  .toolbar label{font-size:12px;color:#666;font-weight:500}
+  .toolbar select{font-size:12px;padding:5px 9px;border:1px solid #ddd;border-radius:5px;background:#fff;font-family:inherit}
+  .card{background:#fff;border:1px solid #e5e5e5;border-radius:8px;padding:16px;margin-bottom:16px}
+  .card-title{font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px}
+  .chart-wrap{position:relative;width:100%}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;padding:7px 10px;background:#f4f4f4;border-bottom:1px solid #e5e5e5;font-weight:600;color:#555;font-size:11px}
+  td{padding:7px 10px;border-bottom:1px solid #f0f0f0}
+  tr:hover td{background:#fafafa}
+  .rank{font-weight:700;color:#1a1a2e;width:28px}
+  .bar-bg{background:#eee;border-radius:3px;height:8px}
+  .bar-fill{background:#1a6b3c;border-radius:3px;height:8px}
+  @media(max-width:700px){.metrics{grid-template-columns:repeat(2,1fr)}.two-col{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>NFL College Pipeline</h1><small>Which colleges produce the most above-average NFL players? · 2015–2024</small></div>
+  <span class="pill">2,075 player-seasons</span>
+  <span class="pill">202 colleges</span>
+  <span class="pill">14 positions</span>
+</header>
+<div class="tabs">
+  <button class="tb active" onclick="sw('alltime',this)">All-time rankings</button>
+  <button class="tb"        onclick="sw('season',this)">By season</button>
+  <button class="tb"        onclick="sw('position',this)">By position</button>
+</div>
+
+<div id="page-alltime" class="page active">
+  <div class="metrics">
+    <div class="metric"><div class="val">2,075</div><div class="lbl">Player-seasons tracked</div></div>
+    <div class="metric"><div class="val green">735</div><div class="lbl">Above-average performances</div></div>
+    <div class="metric"><div class="val blue">35.4%</div><div class="lbl">Overall above-avg rate</div></div>
+    <div class="metric"><div class="val gold">Ohio St.</div><div class="lbl">All-time #1 pipeline</div></div>
+  </div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Top 20 schools — all-time</div>
+      <div class="chart-wrap" style="height:380px"><canvas id="at-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">All-time rankings</div>
+      <table><thead><tr><th>#</th><th>College</th><th>Above avg</th><th>Bar</th></tr></thead>
+      <tbody id="at-table"></tbody></table>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">Above-average players per season</div>
+    <div class="chart-wrap" style="height:220px"><canvas id="trend-chart"></canvas></div>
+  </div>
+</div>
+
+<div id="page-season" class="page">
+  <div class="toolbar">
+    <label>Season</label>
+    <select id="season-sel" onchange="renderSeason()"></select>
+  </div>
+  <div class="metrics" id="season-metrics"></div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title" id="season-title">Top 10 schools</div>
+      <div class="chart-wrap" style="height:300px"><canvas id="season-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Rankings</div>
+      <table><thead><tr><th>#</th><th>College</th><th>Players</th><th>Bar</th></tr></thead>
+      <tbody id="season-table"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<div id="page-position" class="page">
+  <div class="metrics">
+    <div class="metric"><div class="val blue" id="p1n"></div><div class="lbl" id="p1l"></div></div>
+    <div class="metric"><div class="val blue" id="p2n"></div><div class="lbl" id="p2l"></div></div>
+    <div class="metric"><div class="val blue" id="p3n"></div><div class="lbl" id="p3l"></div></div>
+    <div class="metric"><div class="val">14</div><div class="lbl">Positions tracked</div></div>
+  </div>
+  <div class="two-col">
+    <div class="card">
+      <div class="card-title">Above-avg players by position</div>
+      <div class="chart-wrap" style="height:340px"><canvas id="pos-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Position breakdown</div>
+      <table><thead><tr><th>#</th><th>Position</th><th>Above avg</th><th>Bar</th></tr></thead>
+      <tbody id="pos-table"></tbody></table>
+    </div>
+  </div>
+</div>
+
+<script>
+const TOP10   = {"2015": [{"college": "Clemson", "count": 8}, {"college": "Auburn", "count": 7}, {"college": "Alabama", "count": 6}, {"college": "Florida St.", "count": 6}, {"college": "Georgia", "count": 5}, {"college": "Miami (FL)", "count": 5}, {"college": "Mississippi St.", "count": 4}, {"college": "Ohio St.", "count": 4}, {"college": "USC", "count": 4}, {"college": "Kentucky", "count": 3}], "2016": [{"college": "Ohio St.", "count": 6}, {"college": "Clemson", "count": 4}, {"college": "Alabama", "count": 3}, {"college": "Arkansas", "count": 3}, {"college": "Florida", "count": 3}, {"college": "Georgia", "count": 2}, {"college": "LSU", "count": 2}, {"college": "Maryland", "count": 2}, {"college": "North Carolina St.", "count": 2}, {"college": "Stanford", "count": 2}], "2017": [{"college": "Ohio St.", "count": 4}, {"college": "Tennessee", "count": 4}, {"college": "Alabama", "count": 3}, {"college": "Iowa", "count": 3}, {"college": "LSU", "count": 3}, {"college": "South Carolina", "count": 3}, {"college": "Boston Col.", "count": 2}, {"college": "Colorado", "count": 2}, {"college": "Eastern Washington", "count": 2}, {"college": "Florida St.", "count": 2}], "2018": [{"college": "Alabama", "count": 4}, {"college": "USC", "count": 4}, {"college": "Florida St.", "count": 3}, {"college": "Georgia", "count": 3}, {"college": "LSU", "count": 3}, {"college": "Ohio St.", "count": 3}, {"college": "Stanford", "count": 3}, {"college": "Central Florida", "count": 2}, {"college": "Florida", "count": 2}, {"college": "Iowa", "count": 2}], "2019": [{"college": "Clemson", "count": 4}, {"college": "Iowa", "count": 3}, {"college": "Michigan", "count": 3}, {"college": "Oklahoma", "count": 3}, {"college": "Auburn", "count": 2}, {"college": "Boston Col.", "count": 2}, {"college": "Miami (FL)", "count": 2}, {"college": "Mississippi", "count": 2}, {"college": "Mississippi St.", "count": 2}, {"college": "Notre Dame", "count": 2}], "2020": [{"college": "LSU", "count": 6}, {"college": "Alabama", "count": 4}, {"college": "Clemson", "count": 4}, {"college": "Oklahoma", "count": 4}, {"college": "Georgia", "count": 3}, {"college": "Louisiana Tech", "count": 3}, {"college": "Memphis", "count": 3}, {"college": "Michigan", "count": 3}, {"college": "Notre Dame", "count": 3}, {"college": "Boston Col.", "count": 2}], "2021": [{"college": "Alabama", "count": 4}, {"college": "Florida", "count": 4}, {"college": "Ohio St.", "count": 4}, {"college": "Penn St.", "count": 4}, {"college": "Notre Dame", "count": 3}, {"college": "Washington", "count": 3}, {"college": "Georgia", "count": 2}, {"college": "Michigan", "count": 2}, {"college": "Minnesota", "count": 2}, {"college": "Purdue", "count": 2}], "2022": [{"college": "Georgia", "count": 5}, {"college": "Cincinnati", "count": 3}, {"college": "Washington", "count": 3}, {"college": "Auburn", "count": 2}, {"college": "Florida", "count": 2}, {"college": "Kentucky", "count": 2}, {"college": "Michigan", "count": 2}, {"college": "Ohio St.", "count": 2}, {"college": "Penn St.", "count": 2}, {"college": "Pittsburgh", "count": 2}], "2023": [{"college": "Alabama", "count": 5}, {"college": "Iowa", "count": 3}, {"college": "Ohio St.", "count": 3}, {"college": "USC", "count": 3}, {"college": "Clemson", "count": 2}, {"college": "Kentucky", "count": 2}, {"college": "Maryland", "count": 2}, {"college": "Michigan", "count": 2}, {"college": "Mississippi", "count": 2}, {"college": "Penn St.", "count": 2}], "2024": [{"college": "Michigan", "count": 4}, {"college": "Florida St.", "count": 3}, {"college": "Georgia", "count": 3}, {"college": "Notre Dame", "count": 3}, {"college": "Oregon", "count": 3}, {"college": "Texas", "count": 3}, {"college": "Arkansas", "count": 2}, {"college": "Florida", "count": 2}, {"college": "Illinois", "count": 2}, {"college": "Iowa", "count": 2}]};
+const ALL_TIME = [{"college": "Ohio St.", "total": 32}, {"college": "Alabama", "total": 31}, {"college": "Clemson", "total": 27}, {"college": "Georgia", "total": 25}, {"college": "Michigan", "total": 21}, {"college": "LSU", "total": 21}, {"college": "Florida", "total": 19}, {"college": "Penn St.", "total": 19}, {"college": "Florida St.", "total": 18}, {"college": "Oklahoma", "total": 17}, {"college": "USC", "total": 16}, {"college": "Auburn", "total": 15}, {"college": "Notre Dame", "total": 15}, {"college": "Washington", "total": 15}, {"college": "Iowa", "total": 14}, {"college": "Miami (FL)", "total": 13}, {"college": "South Carolina", "total": 13}, {"college": "Oregon", "total": 13}, {"college": "Utah", "total": 11}, {"college": "Stanford", "total": 11}];
+const SEASONS  = [{"season": 2015, "total_players": 377, "above_avg": 127, "pct": 33.7}, {"season": 2016, "total_players": 221, "above_avg": 71, "pct": 32.1}, {"season": 2017, "total_players": 203, "above_avg": 77, "pct": 37.9}, {"season": 2018, "total_players": 195, "above_avg": 70, "pct": 35.9}, {"season": 2019, "total_players": 183, "above_avg": 64, "pct": 35.0}, {"season": 2020, "total_players": 179, "above_avg": 72, "pct": 40.2}, {"season": 2021, "total_players": 195, "above_avg": 64, "pct": 32.8}, {"season": 2022, "total_players": 170, "above_avg": 61, "pct": 35.9}, {"season": 2023, "total_players": 183, "above_avg": 70, "pct": 38.3}, {"season": 2024, "total_players": 169, "above_avg": 59, "pct": 34.9}];
+const POS      = [{"position": "WR", "total": 114}, {"position": "CB", "total": 107}, {"position": "LB", "total": 106}, {"position": "DE", "total": 74}, {"position": "RB", "total": 72}, {"position": "DT", "total": 63}, {"position": "TE", "total": 58}, {"position": "QB", "total": 41}, {"position": "DB", "total": 28}, {"position": "OLB", "total": 21}, {"position": "FS", "total": 15}, {"position": "ILB", "total": 12}, {"position": "K", "total": 12}, {"position": "S", "total": 12}];
+let C = {};
+
+function sw(t, btn) {
+  document.querySelectorAll('.tb').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + t).classList.add('active');
+}
+
+function bar(v, mx) {
+  return '<div class="bar-bg"><div class="bar-fill" style="width:' + Math.round(v/mx*100) + '%"></div></div>';
+}
+
+function initAllTime() {
+  const labels = ALL_TIME.map(r => r.college);
+  const vals   = ALL_TIME.map(r => r.total);
+  const mx     = vals[0];
+  if (C.at) C.at.destroy();
+  C.at = new Chart(document.getElementById('at-chart'), {
+    type: 'bar',
+    data: { labels, datasets: [{ data: vals, backgroundColor: vals.map((_, i) => i===0 ? '#1a1a2e' : i<3 ? '#1a6b3c' : '#93c4a8'), borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#666', font: { size: 10 }, maxRotation: 40 } },
+        y: { grid: { color: '#f0f0f0' }, ticks: { color: '#888', font: { size: 10 } } }
+      }
+    }
+  });
+  document.getElementById('at-table').innerHTML = ALL_TIME.map((r, i) =>
+    '<tr><td class="rank">' + (i+1) + '</td><td>' + r.college + '</td><td><strong>' + r.total + '</strong></td><td>' + bar(r.total, mx) + '</td></tr>'
+  ).join('');
+
+  if (C.tr) C.tr.destroy();
+  C.tr = new Chart(document.getElementById('trend-chart'), {
+    type: 'bar',
+    data: {
+      labels: SEASONS.map(r => r.season),
+      datasets: [
+        { label: 'Above avg', data: SEASONS.map(r => r.above_avg), backgroundColor: '#1a6b3c', borderRadius: 3, order: 2 },
+        { label: '% rate', data: SEASONS.map(r => r.pct), type: 'line', borderColor: '#1a1a2e',
+          backgroundColor: 'transparent', pointRadius: 4, pointBackgroundColor: '#1a1a2e',
+          yAxisID: 'y2', order: 1, tension: 0.3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { font: { size: 11 }, boxWidth: 12 } }, tooltip: { mode: 'index' } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#666', font: { size: 11 } } },
+        y: { grid: { color: '#f0f0f0' }, ticks: { color: '#888', font: { size: 10 } } },
+        y2: { position: 'right', grid: { display: false }, min: 25, max: 50,
+              ticks: { color: '#888', font: { size: 10 }, callback: v => v + '%' } }
+      }
+    }
+  });
+}
+
+function buildSeasonSelect() {
+  const sel = document.getElementById('season-sel');
+  sel.innerHTML = Object.keys(TOP10).sort().map(y => '<option>' + y + '</option>').join('');
+  sel.value = Object.keys(TOP10).sort().pop();
+  renderSeason();
+}
+
+function renderSeason() {
+  const yr   = document.getElementById('season-sel').value;
+  const data = TOP10[yr] || [];
+  const ss   = SEASONS.find(r => r.season == yr) || {};
+  const mx   = data[0] ? data[0].count : 1;
+  document.getElementById('season-metrics').innerHTML =
+    '<div class="metric"><div class="val">' + yr + '</div><div class="lbl">Season</div></div>' +
+    '<div class="metric"><div class="val green">' + (data[0] ? data[0].college : '—') + '</div><div class="lbl">Top school</div></div>' +
+    '<div class="metric"><div class="val blue">' + (ss.above_avg || 0) + '</div><div class="lbl">Above-avg players</div></div>' +
+    '<div class="metric"><div class="val">' + (ss.pct || 0) + '%</div><div class="lbl">Above-avg rate</div></div>';
+  document.getElementById('season-title').textContent = 'Top 10 schools — ' + yr;
+  if (C.s) C.s.destroy();
+  C.s = new Chart(document.getElementById('season-chart'), {
+    type: 'bar',
+    data: { labels: data.map(r => r.college), datasets: [{ data: data.map(r => r.count), backgroundColor: data.map((_, i) => i===0 ? '#1a1a2e' : i<3 ? '#1a6b3c' : '#93c4a8'), borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#666', font: { size: 11 }, maxRotation: 35 } },
+        y: { grid: { color: '#f0f0f0' }, ticks: { color: '#888', font: { size: 10 }, stepSize: 1 } }
+      }
+    }
+  });
+  document.getElementById('season-table').innerHTML = data.map((r, i) =>
+    '<tr><td class="rank">' + (i+1) + '</td><td>' + r.college + '</td><td><strong>' + r.count + '</strong></td><td>' + bar(r.count, mx) + '</td></tr>'
+  ).join('');
+}
+
+function initPosition() {
+  const mx = POS[0].total;
+  const labels = ['Most', '2nd most', '3rd most'];
+  POS.slice(0, 3).forEach((r, i) => {
+    document.getElementById('p' + (i+1) + 'n').textContent = r.position;
+    document.getElementById('p' + (i+1) + 'l').textContent = labels[i] + ' above-avg (' + r.total + ')';
+  });
+  if (C.p) C.p.destroy();
+  C.p = new Chart(document.getElementById('pos-chart'), {
+    type: 'bar',
+    data: { labels: POS.map(r => r.position), datasets: [{ data: POS.map(r => r.total), backgroundColor: POS.map((_, i) => i<3 ? ['#1a1a2e','#1a6b3c','#2d7a2d'][i] : '#93c4a8'), borderRadius: 4 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#666', font: { size: 12 } } },
+        y: { grid: { color: '#f0f0f0' }, ticks: { color: '#888', font: { size: 10 } } }
+      }
+    }
+  });
+  document.getElementById('pos-table').innerHTML = POS.map((r, i) =>
+    '<tr><td class="rank">' + (i+1) + '</td><td><strong>' + r.position + '</strong></td><td>' + r.total + '</td><td>' + bar(r.total, mx) + '</td></tr>'
+  ).join('');
+}
+
+initAllTime();
+buildSeasonSelect();
+initPosition();
+</script>
+</body>
+</html>
